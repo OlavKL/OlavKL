@@ -1,0 +1,5 @@
+# Provides the IANA time zone database for Python's stdlib `zoneinfo`
+# module. Linux CI runners already ship system tzdata, but installing
+# this package makes `zoneinfo.ZoneInfo("Europe/Oslo")` work reliably
+# everywhere, including Windows, without relying on the OS having it.
+tzdata

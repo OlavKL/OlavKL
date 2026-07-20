@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="terminal.png" alt="Terminal Header" width="100%">
+  <img src="./assets/profile-terminal.svg" alt="Olav Leek terminal profile" width="100%">
 </p>
 
 # Hi, I'm Olav Leek 👋

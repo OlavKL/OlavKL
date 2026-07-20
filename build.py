@@ -49,14 +49,14 @@ PAGE = f"""<!doctype html>
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 110px;
+    padding: 0 80px;
     font-family: 'Cascadia Code', 'Cascadia Mono', Consolas, 'Courier New', monospace;
   }}
 
   .content {{
     display: flex;
     align-items: center;
-    gap: 70px;
+    gap: 46px;
     width: 100%;
   }}
 
@@ -65,13 +65,12 @@ PAGE = f"""<!doctype html>
   }}
 
   .portrait {{
-    font-size: 14.8px;
-    line-height: 14.8px;
+    font-size: 16.7px;
+    line-height: 16.7px;
     letter-spacing: 0.3px;
     white-space: pre;
-    color: #b7c6f0;
-    text-shadow: 0 0 14px rgba(122,162,247,0.35), 0 0 2px rgba(180,197,240,0.4);
-    filter: drop-shadow(0 0 22px rgba(122,162,247,0.16));
+    color: #ffffff;
+    text-shadow: 0 0 4px rgba(255,255,255,0.45);
   }}
 
   .divider {{
@@ -86,15 +85,15 @@ PAGE = f"""<!doctype html>
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 34px;
-    font-size: 21px;
-    line-height: 1.55;
+    gap: 22px;
+    font-size: 18px;
+    line-height: 1.3;
   }}
 
   .prompt {{
     color: #6ee7b7;
     font-weight: 600;
-    font-size: 22px;
+    font-size: 17px;
   }}
   .prompt .path {{
     color: #7aa2f7;
@@ -106,45 +105,45 @@ PAGE = f"""<!doctype html>
   .block {{
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
   }}
 
   .name {{
-    font-size: 48px;
+    font-size: 46px;
     font-weight: 600;
-    color: #f5f6fa;
+    color: #ffffff;
     letter-spacing: 0.3px;
-    margin-top: 4px;
+    margin-top: 2px;
   }}
 
   .role {{
-    color: #e0af68;
-    font-size: 25px;
+    color: #e5b567;
+    font-size: 21px;
     letter-spacing: 0.3px;
   }}
 
   .sysinfo {{
     display: grid;
     grid-template-columns: auto 1fr;
-    column-gap: 30px;
-    row-gap: 13px;
-    font-size: 20px;
+    column-gap: 20px;
+    row-gap: 7px;
+    font-size: 18px;
   }}
   .sysinfo .k {{
-    color: #7aa2f7;
+    color: #e06c75;
     font-weight: 600;
     letter-spacing: 0.2px;
     white-space: nowrap;
   }}
   .sysinfo .v {{
-    color: #c3c8dd;
+    color: #d4d7e0;
   }}
 
   .gh-row {{
     display: flex;
     align-items: baseline;
     gap: 10px;
-    font-size: 22px;
+    font-size: 18px;
   }}
   .gh-row .at {{ color: #565a6e; }}
   .gh-row .handle {{ color: #7aa2f7; font-weight: 600; }}

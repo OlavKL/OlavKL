@@ -1,0 +1,50 @@
+name: Update profile SVG
+
+on:
+  schedule:
+    # 23:00 UTC every day. Europe/Oslo is UTC+1 (CET) in winter and
+    # UTC+2 (CEST) in summer, so this lands at 00:00 Oslo time in
+    # winter and 01:00 Oslo time in summer — shortly after local
+    # midnight either way. The exact run time only controls how soon
+    # the day's new Uptime value gets picked up; the value itself is
+    # computed from the current Europe/Oslo date inside the script,
+    # not from when the workflow happens to run.
+    - cron: "0 23 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-profile-svg
+  cancel-in-progress: false
+
+jobs:
+  update-svg:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements.txt
+
+      - name: Generate SVG
+        run: python scripts/generate_profile_svg.py
+
+      - name: Commit and push if changed
+        run: |
+          if git diff --quiet -- assets/profile-terminal.svg; then
+            echo "No change to assets/profile-terminal.svg, nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add assets/profile-terminal.svg
+          git commit -m "chore: update profile uptime"
+          git push
