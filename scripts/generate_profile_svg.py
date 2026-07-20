@@ -42,7 +42,7 @@ WIDTH, HEIGHT = 1800, 900
 CENTER_Y = HEIGHT / 2
 BG_COLOR = "#0a0b10"
 FONT_FAMILY = "'Cascadia Code','Cascadia Mono',Consolas,'Courier New',monospace"
-CHAR_ASPECT = 0.6  # monospace glyph advance width, as a fraction of font-size
+CHAR_ASPECT = 0.5859375  # Cascadia Code's measured advance width, as a fraction of font-size
 
 # --- Palette (terminal-inspired) -------------------------------------------
 COLOR_PORTRAIT = "#ffffff"
@@ -71,7 +71,7 @@ SYSINFO_FONT = 18
 GHROW_FONT = 18
 
 DOT_LEADER_CHAR = "."
-DOT_LEADER_GAP = 9  # dot columns reserved after the longest label
+MIN_DOTS = 1  # smallest leader allowed between a label and its value
 SYSINFO_ROW_GAP = 8
 SYSINFO_LINE_H = SYSINFO_FONT * 1.3
 SYSINFO_CHAR_W = SYSINFO_FONT * CHAR_ASPECT
@@ -137,19 +137,39 @@ def get_sysinfo_entries(uptime_text: str) -> list[tuple[str, str]]:
     ]
 
 
-def dot_leader_target_col(sysinfo_entries: list[tuple[str, str]]) -> int:
-    """Character column every value must start at.
+def wrap_value_right(value: str, label_len: int, total_chars: int) -> list[str]:
+    """Split `value` into lines that each fit within `total_chars`.
 
-    Automatically derived from the longest label so a fixed number of
-    dot columns (DOT_LEADER_GAP) always follows it, and shorter labels
-    pick up correspondingly more dots to reach the same column.
+    The first line additionally has to share its row with `label_len`
+    characters of label, so it gets fewer usable characters than any
+    continuation line (which spans the row on its own). This asymmetry
+    is what lets every line — first or wrapped — end at the same right
+    edge once it's right-anchored there.
     """
-    return max(len(label) for label, _ in sysinfo_entries) + DOT_LEADER_GAP
+    first_budget = max(1, total_chars - label_len - MIN_DOTS)
+    words = value.split(" ")
+
+    first_words: list[str] = []
+    used = 0
+    i = 0
+    while i < len(words):
+        w = words[i]
+        added = len(w) if not first_words else len(w) + 1
+        if not first_words or used + added <= first_budget:
+            first_words.append(w)
+            used += added
+            i += 1
+        else:
+            break
+
+    lines = [" ".join(first_words)]
+    remainder = " ".join(words[i:])
+    if remainder:
+        lines.extend(textwrap.wrap(remainder, width=total_chars) or [remainder])
+    return lines
 
 
-def build_info_events(
-    sysinfo_entries: list[tuple[str, str]], target_col: int, value_max_chars: int
-) -> list[tuple]:
+def build_info_events(sysinfo_entries: list[tuple[str, str]], total_chars: int) -> list[tuple]:
     events: list[tuple] = [
         ("prompt", [("~", COLOR_LINK), (" $ ", COLOR_PROMPT), ("whoami", COLOR_CMD)], PROMPT_FONT * 1.2, 6),
         ("name", NAME_TEXT, NAME_FONT * 1.15, 6),
@@ -157,8 +177,8 @@ def build_info_events(
     ]
 
     for i, (label, value) in enumerate(sysinfo_entries):
-        wrapped = textwrap.wrap(value, width=value_max_chars) or [""]
-        dots = DOT_LEADER_CHAR * max(1, target_col - len(label))
+        wrapped = wrap_value_right(value, len(label), total_chars)
+        dots = DOT_LEADER_CHAR * max(MIN_DOTS, total_chars - len(label) - len(wrapped[0]))
         gap_after = SYSINFO_ROW_GAP if i < len(sysinfo_entries) - 1 else BLOCK_GAP
         events.append(("sysrow", label, dots, wrapped, gap_after))
 
@@ -169,7 +189,7 @@ def build_info_events(
     return events
 
 
-def render_info_events(events: list[tuple], start_y: float, x_label: float, x_value: float, emit: bool):
+def render_info_events(events: list[tuple], start_y: float, x_label: float, x_right: float, emit: bool):
     y = start_y
     parts: list[str] = []
 
@@ -213,25 +233,26 @@ def render_info_events(events: list[tuple], start_y: float, x_label: float, x_va
         elif kind == "sysrow":
             _, label, dots, wrapped_lines, gap_after = ev
             first_baseline = None
-            continuation_tspans = []
+            continuation_parts = []
             for j, line_text in enumerate(wrapped_lines):
                 y += SYSINFO_LINE_H
                 if j == 0:
                     first_baseline = y
                 else:
-                    # Wrapped continuation lines align under the value's
-                    # start column, not under the label.
-                    continuation_tspans.append(
-                        f'<tspan x="{x_value:.1f}" y="{y:.1f}" fill="{COLOR_VALUE}">'
-                        f'{xml_escape(line_text)}</tspan>'
+                    # Each wrapped continuation line is independently
+                    # right-anchored to the same boundary as the value
+                    # above it — native anchoring, not a guessed x.
+                    continuation_parts.append(
+                        f'<text x="{x_right:.1f}" y="{y:.1f}" text-anchor="end" '
+                        f'font-family="{FONT_FAMILY}" font-size="{SYSINFO_FONT}" '
+                        f'fill="{COLOR_VALUE}">{xml_escape(line_text)}</text>'
                     )
             if emit:
                 first_value = wrapped_lines[0] if wrapped_lines else ""
-                # Lock the label and dot-leader segments to their exact
-                # intended pixel widths via textLength, so the value
-                # column starts at the same x on every renderer/font
-                # instead of relying on an assumed character-advance
-                # ratio (which drifts slightly across fonts).
+                # Lock the label and dot-leader segments to their
+                # intended pixel widths via textLength, so the dot run
+                # starts and ends at a predictable spot regardless of
+                # renderer/font.
                 label_len = f'{len(label) * SYSINFO_CHAR_W:.2f}'
                 dots_len = f'{len(dots) * SYSINFO_CHAR_W:.2f}'
                 parts.append(
@@ -241,10 +262,18 @@ def render_info_events(events: list[tuple], start_y: float, x_label: float, x_va
                     f'textLength="{label_len}" lengthAdjust="spacing">{xml_escape(label)}</tspan>'
                     f'<tspan fill="{COLOR_DOT_LEADER}" '
                     f'textLength="{dots_len}" lengthAdjust="spacing">{xml_escape(dots)}</tspan>'
-                    f'<tspan fill="{COLOR_VALUE}">{xml_escape(first_value)}</tspan>'
-                    f'{"".join(continuation_tspans)}'
                     f'</text>'
                 )
+                # The value itself is a separate, natively right-anchored
+                # text element, so its right edge is exact regardless of
+                # actual glyph widths — it isn't derived from the
+                # (estimated) width of the label + dot leader before it.
+                parts.append(
+                    f'<text x="{x_right:.1f}" y="{first_baseline:.1f}" text-anchor="end" '
+                    f'font-family="{FONT_FAMILY}" font-size="{SYSINFO_FONT}" '
+                    f'fill="{COLOR_VALUE}">{xml_escape(first_value)}</text>'
+                )
+                parts.extend(continuation_parts)
             y += gap_after
 
         elif kind == "ghrow":
@@ -284,20 +313,18 @@ def build_svg(uptime_text: str) -> str:
     divider_y1 = portrait_top_y
     divider_y2 = portrait_top_y + portrait_block_h
 
-    sysinfo_entries = get_sysinfo_entries(uptime_text)
-    target_col = dot_leader_target_col(sysinfo_entries)
-
     info_x = divider_x + 1 + COL_GAP
     label_x = info_x
-    value_x = info_x + target_col * SYSINFO_CHAR_W
-    info_col_width = WIDTH - STAGE_PAD_X - info_x
-    value_col_width = info_col_width - target_col * SYSINFO_CHAR_W
-    value_max_chars = max(10, int(value_col_width / SYSINFO_CHAR_W))
+    # Fixed right boundary every value (and wrapped continuation line)
+    # is right-anchored against, mirroring the card's left padding.
+    info_right_x = WIDTH - STAGE_PAD_X
+    sysinfo_total_chars = max(10, int((info_right_x - label_x) / SYSINFO_CHAR_W))
 
-    events = build_info_events(sysinfo_entries, target_col, value_max_chars)
-    total_h, _ = render_info_events(events, 0, label_x, value_x, emit=False)
+    sysinfo_entries = get_sysinfo_entries(uptime_text)
+    events = build_info_events(sysinfo_entries, sysinfo_total_chars)
+    total_h, _ = render_info_events(events, 0, label_x, info_right_x, emit=False)
     info_top_y = CENTER_Y - total_h / 2
-    _, info_parts = render_info_events(events, info_top_y, label_x, value_x, emit=True)
+    _, info_parts = render_info_events(events, info_top_y, label_x, info_right_x, emit=True)
 
     portrait_parts = []
     for i, line in enumerate(portrait_lines):
