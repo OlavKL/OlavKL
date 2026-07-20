@@ -54,6 +54,7 @@ COLOR_PROMPT = "#6ee7b7"    # green
 COLOR_CMD = "#e8e9ee"       # near-white command text
 COLOR_LINK = "#7aa2f7"      # terminal blue
 COLOR_MUTED = "#565a6e"
+COLOR_DOT_LEADER = "#565a6e"  # dim separator dots between label and value
 COLOR_DIVIDER = "#ffffff"
 
 # --- Layout ------------------------------------------------------------------
@@ -69,7 +70,8 @@ ROLE_FONT = 21
 SYSINFO_FONT = 18
 GHROW_FONT = 18
 
-LABEL_COL_W = 190
+DOT_LEADER_CHAR = "."
+DOT_LEADER_GAP = 9  # dot columns reserved after the longest label
 SYSINFO_ROW_GAP = 8
 SYSINFO_LINE_H = SYSINFO_FONT * 1.3
 BLOCK_GAP = 26
@@ -123,16 +125,30 @@ def load_ascii_portrait() -> list[str]:
 # markup while accumulating a y-cursor, so the exact same increments are
 # used both to measure the block's total height and to place it.
 
-def build_info_events(uptime_text: str, value_max_chars: int) -> list[tuple]:
-    sysinfo_entries = [
+def get_sysinfo_entries(uptime_text: str) -> list[tuple[str, str]]:
+    return [
         ("Uptime", uptime_text),
         ("Education", "BSc Economics & Business Administration"),
         ("Interests", "Investing, Real Estate, Business Analytics"),
         ("Experience", "Technical Support, Fiber Networks & Wi-Fi"),
-        ("Background", "iOS Jailbreaking, Minecraft Servers, Bitcoin Mining, Helium Mining"),
+        ("Side Quests", "iOS Jailbreaking, Crypto Mining, Web Scraping, Automation"),
         ("Languages", "Python, SQL"),
     ]
 
+
+def dot_leader_target_col(sysinfo_entries: list[tuple[str, str]]) -> int:
+    """Character column every value must start at.
+
+    Automatically derived from the longest label so a fixed number of
+    dot columns (DOT_LEADER_GAP) always follows it, and shorter labels
+    pick up correspondingly more dots to reach the same column.
+    """
+    return max(len(label) for label, _ in sysinfo_entries) + DOT_LEADER_GAP
+
+
+def build_info_events(
+    sysinfo_entries: list[tuple[str, str]], target_col: int, value_max_chars: int
+) -> list[tuple]:
     events: list[tuple] = [
         ("prompt", [("~", COLOR_LINK), (" $ ", COLOR_PROMPT), ("whoami", COLOR_CMD)], PROMPT_FONT * 1.2, 6),
         ("name", NAME_TEXT, NAME_FONT * 1.15, 6),
@@ -141,8 +157,9 @@ def build_info_events(uptime_text: str, value_max_chars: int) -> list[tuple]:
 
     for i, (label, value) in enumerate(sysinfo_entries):
         wrapped = textwrap.wrap(value, width=value_max_chars) or [""]
+        dots = DOT_LEADER_CHAR * max(1, target_col - len(label))
         gap_after = SYSINFO_ROW_GAP if i < len(sysinfo_entries) - 1 else BLOCK_GAP
-        events.append(("sysrow", label, wrapped, gap_after))
+        events.append(("sysrow", label, dots, wrapped, gap_after))
 
     events.append(
         ("prompt", [("~", COLOR_LINK), (" $ ", COLOR_PROMPT), ("gh profile", COLOR_CMD)], PROMPT_FONT * 1.2, 4)
@@ -193,24 +210,30 @@ def render_info_events(events: list[tuple], start_y: float, x_label: float, x_va
             y += gap_after
 
         elif kind == "sysrow":
-            _, label, wrapped_lines, gap_after = ev
+            _, label, dots, wrapped_lines, gap_after = ev
             first_baseline = None
-            value_tspans = []
+            continuation_tspans = []
             for j, line_text in enumerate(wrapped_lines):
                 y += SYSINFO_LINE_H
                 if j == 0:
                     first_baseline = y
-                dx = x_value if j == 0 else x_value
-                value_tspans.append(f'<tspan x="{dx:.1f}" y="{y:.1f}">{xml_escape(line_text)}</tspan>')
+                else:
+                    # Wrapped continuation lines align under the value's
+                    # start column, not under the label.
+                    continuation_tspans.append(
+                        f'<tspan x="{x_value:.1f}" y="{y:.1f}" fill="{COLOR_VALUE}">'
+                        f'{xml_escape(line_text)}</tspan>'
+                    )
             if emit:
+                first_value = wrapped_lines[0] if wrapped_lines else ""
                 parts.append(
                     f'<text x="{x_label:.1f}" y="{first_baseline:.1f}" font-family="{FONT_FAMILY}" '
-                    f'font-size="{SYSINFO_FONT}" font-weight="600" fill="{COLOR_LABEL}">'
-                    f'{xml_escape(label)}</text>'
-                )
-                parts.append(
-                    f'<text font-family="{FONT_FAMILY}" font-size="{SYSINFO_FONT}" '
-                    f'fill="{COLOR_VALUE}">{"".join(value_tspans)}</text>'
+                    f'font-size="{SYSINFO_FONT}">'
+                    f'<tspan fill="{COLOR_LABEL}" font-weight="600">{xml_escape(label)}</tspan>'
+                    f'<tspan fill="{COLOR_DOT_LEADER}">{xml_escape(dots)}</tspan>'
+                    f'<tspan fill="{COLOR_VALUE}">{xml_escape(first_value)}</tspan>'
+                    f'{"".join(continuation_tspans)}'
+                    f'</text>'
                 )
             y += gap_after
 
@@ -251,14 +274,18 @@ def build_svg(uptime_text: str) -> str:
     divider_y1 = portrait_top_y
     divider_y2 = portrait_top_y + portrait_block_h
 
+    sysinfo_entries = get_sysinfo_entries(uptime_text)
+    target_col = dot_leader_target_col(sysinfo_entries)
+    sysinfo_char_w = SYSINFO_FONT * CHAR_ASPECT
+
     info_x = divider_x + 1 + COL_GAP
     label_x = info_x
-    value_x = info_x + LABEL_COL_W
+    value_x = info_x + target_col * sysinfo_char_w
     info_col_width = WIDTH - STAGE_PAD_X - info_x
-    value_col_width = info_col_width - LABEL_COL_W
-    value_max_chars = max(10, int(value_col_width / (SYSINFO_FONT * CHAR_ASPECT)))
+    value_col_width = info_col_width - target_col * sysinfo_char_w
+    value_max_chars = max(10, int(value_col_width / sysinfo_char_w))
 
-    events = build_info_events(uptime_text, value_max_chars)
+    events = build_info_events(sysinfo_entries, target_col, value_max_chars)
     total_h, _ = render_info_events(events, 0, label_x, value_x, emit=False)
     info_top_y = CENTER_Y - total_h / 2
     _, info_parts = render_info_events(events, info_top_y, label_x, value_x, emit=True)

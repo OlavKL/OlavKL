@@ -177,7 +177,7 @@ PAGE = f"""<!doctype html>
             <span class="k">Education</span><span class="v">BSc Economics &amp; Business Administration</span>
             <span class="k">Interests</span><span class="v">Investing, Real Estate, Business Analytics</span>
             <span class="k">Experience</span><span class="v">Technical Support, Fiber Networks &amp; Wi-Fi</span>
-            <span class="k">Background</span><span class="v">iOS Jailbreaking, Minecraft Servers, Bitcoin Mining, Helium Mining</span>
+            <span class="k">Side Quests</span><span class="v">iOS Jailbreaking, Crypto Mining, Web Scraping, Automation</span>
             <span class="k">Languages</span><span class="v">Python, SQL</span>
           </div>
         </div>
