@@ -1,0 +1,272 @@
+"""
+Builds terminal.png: a premium dark-terminal GitHub profile header.
+
+Pipeline:
+  1. Read the pre-generated ASCII portrait (generate_ascii.py output).
+  2. Inject it into an HTML/CSS terminal-window template.
+  3. Render the page with Playwright (headless Chromium) at exactly
+     1800x900px and screenshot it to terminal.png.
+
+Run `python generate_ascii.py` first if assets/profile.png changes.
+"""
+
+import html
+import os
+from playwright.sync_api import sync_playwright
+
+ROOT = os.path.dirname(__file__)
+ASCII_PATH = os.path.join(ROOT, "ascii_portrait.txt")
+HTML_OUT = os.path.join(ROOT, "terminal.html")
+PNG_OUT = os.path.join(ROOT, "terminal.png")
+
+WIDTH, HEIGHT = 1800, 900
+
+with open(ASCII_PATH, "r", encoding="utf-8") as f:
+    ASCII_ART = html.escape(f.read())
+
+PAGE = f"""<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face {{
+    font-family: 'Cascadia Code';
+    src: local('Cascadia Code');
+  }}
+
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+
+  html, body {{
+    width: {WIDTH}px;
+    height: {HEIGHT}px;
+    overflow: hidden;
+    background: radial-gradient(circle at 30% 20%, #14161f 0%, #0a0b10 60%, #060708 100%);
+  }}
+
+  .stage {{
+    width: {WIDTH}px;
+    height: {HEIGHT}px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }}
+
+  .window {{
+    width: 1700px;
+    height: 820px;
+    border-radius: 18px;
+    background: linear-gradient(160deg, #14151d 0%, #101117 55%, #0c0d12 100%);
+    border: 1px solid rgba(255,255,255,0.07);
+    box-shadow:
+      0 40px 90px rgba(0,0,0,0.55),
+      0 0 0 1px rgba(255,255,255,0.02),
+      inset 0 1px 0 rgba(255,255,255,0.04);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    font-family: 'Cascadia Code', 'Cascadia Mono', Consolas, 'Courier New', monospace;
+  }}
+
+  .titlebar {{
+    height: 52px;
+    flex: 0 0 52px;
+    display: flex;
+    align-items: center;
+    padding: 0 22px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0));
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    position: relative;
+  }}
+
+  .dots {{
+    display: flex;
+    gap: 9px;
+  }}
+
+  .dot {{
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+  }}
+  .dot.red    {{ background: linear-gradient(160deg,#ff6b5f,#e8483a); }}
+  .dot.yellow {{ background: linear-gradient(160deg,#ffcb52,#e8a613); }}
+  .dot.green  {{ background: linear-gradient(160deg,#3ed05f,#26a83e); }}
+
+  .titlebar .path {{
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255,255,255,0.38);
+    font-size: 13px;
+    letter-spacing: 0.3px;
+  }}
+
+  .body {{
+    flex: 1;
+    display: flex;
+    padding: 40px 54px 46px 54px;
+    gap: 10px;
+  }}
+
+  .portrait-col {{
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    padding-right: 44px;
+    border-right: 1px solid rgba(255,255,255,0.07);
+  }}
+
+  .portrait {{
+    font-size: 10.4px;
+    line-height: 10.4px;
+    letter-spacing: 0.3px;
+    white-space: pre;
+    color: #b7c6f0;
+    text-shadow: 0 0 14px rgba(122,162,247,0.35), 0 0 2px rgba(180,197,240,0.4);
+    filter: drop-shadow(0 0 22px rgba(122,162,247,0.16));
+  }}
+
+  .info-col {{
+    flex: 1;
+    padding-left: 50px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 22px;
+    font-size: 21px;
+    line-height: 1.55;
+  }}
+
+  .prompt {{
+    color: #6ee7b7;
+    font-weight: 600;
+  }}
+  .prompt .path {{
+    color: #7aa2f7;
+  }}
+  .cmd {{
+    color: #e8e9ee;
+  }}
+
+  .block {{
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }}
+
+  .name {{
+    font-size: 34px;
+    font-weight: 600;
+    color: #f5f6fa;
+    letter-spacing: 0.3px;
+    margin-top: 2px;
+  }}
+
+  .role {{
+    color: #e0af68;
+    font-size: 19px;
+    letter-spacing: 0.3px;
+  }}
+
+  .sysinfo {{
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 22px;
+    row-gap: 8px;
+    font-size: 16.5px;
+  }}
+  .sysinfo .k {{
+    color: #7aa2f7;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+  }}
+  .sysinfo .v {{
+    color: #c3c8dd;
+  }}
+
+  .gh-row {{
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    font-size: 18px;
+  }}
+  .gh-row .at {{ color: #565a6e; }}
+  .gh-row .handle {{ color: #7aa2f7; font-weight: 600; }}
+
+  .cursor {{
+    display: inline-block;
+    width: 10px;
+    height: 20px;
+    background: #7aa2f7;
+    margin-left: 2px;
+    vertical-align: -3px;
+    box-shadow: 0 0 12px rgba(122,162,247,0.7);
+  }}
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="window">
+      <div class="titlebar">
+        <div class="dots">
+          <div class="dot red"></div>
+          <div class="dot yellow"></div>
+          <div class="dot green"></div>
+        </div>
+        <div class="path">olav@github &nbsp;~&nbsp; zsh</div>
+      </div>
+      <div class="body">
+        <div class="portrait-col"><pre class="portrait">{ASCII_ART}</pre></div>
+        <div class="info-col">
+          <div class="block">
+            <div class="prompt"><span class="path">~</span> $ <span class="cmd">whoami</span></div>
+            <div class="name">Olav Leek</div>
+            <div class="role">Aspiring Finance &amp; Business Analytics</div>
+          </div>
+
+          <div class="block">
+            <div class="sysinfo">
+              <span class="k">Education</span><span class="v">BSc Economics &amp; Business Administration</span>
+              <span class="k">Interests</span><span class="v">Investing, Real Estate, Business Analytics</span>
+              <span class="k">Experience</span><span class="v">Technical Support, Fiber Networks &amp; Wi-Fi</span>
+              <span class="k">Background</span><span class="v">iOS Jailbreaking, Minecraft Servers, Bitcoin Mining, Helium Mining</span>
+              <span class="k">Languages</span><span class="v">Python, SQL</span>
+            </div>
+          </div>
+
+          <div class="block">
+            <div class="prompt"><span class="path">~</span> $ <span class="cmd">gh profile</span></div>
+            <div class="gh-row"><span class="at">github.com/</span><span class="handle">OlavKL</span><span class="cursor"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+"""
+
+with open(HTML_OUT, "w", encoding="utf-8") as f:
+    f.write(PAGE)
+
+
+RAW_OUT = os.path.join(ROOT, "_terminal_2x.png")
+
+with sync_playwright() as p:
+    browser = p.chromium.launch()
+    # Render at 2x device scale for crisp text/edges, then downsample to the
+    # exact target resolution for a clean, alias-free final PNG.
+    page = browser.new_page(viewport={"width": WIDTH, "height": HEIGHT}, device_scale_factor=2)
+    page.goto(f"file:///{HTML_OUT.replace(os.sep, '/')}")
+    page.wait_for_timeout(150)
+    page.screenshot(path=RAW_OUT)
+    browser.close()
+
+from PIL import Image
+img = Image.open(RAW_OUT)
+img = img.resize((WIDTH, HEIGHT), Image.LANCZOS)
+img.save(PNG_OUT)
+os.remove(RAW_OUT)
+
+print(f"Wrote {PNG_OUT}")
