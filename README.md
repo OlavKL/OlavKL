@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="terminal.png" alt="Terminal Header" width="100%">
+</p>
+
 # Hi, I'm Olav Leek 👋
 
 Economics student interested in finance, business analytics, software and real estate.
