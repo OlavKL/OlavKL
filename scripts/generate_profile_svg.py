@@ -74,6 +74,7 @@ DOT_LEADER_CHAR = "."
 DOT_LEADER_GAP = 9  # dot columns reserved after the longest label
 SYSINFO_ROW_GAP = 8
 SYSINFO_LINE_H = SYSINFO_FONT * 1.3
+SYSINFO_CHAR_W = SYSINFO_FONT * CHAR_ASPECT
 BLOCK_GAP = 26
 
 NAME_TEXT = "Olav Leek"
@@ -226,11 +227,20 @@ def render_info_events(events: list[tuple], start_y: float, x_label: float, x_va
                     )
             if emit:
                 first_value = wrapped_lines[0] if wrapped_lines else ""
+                # Lock the label and dot-leader segments to their exact
+                # intended pixel widths via textLength, so the value
+                # column starts at the same x on every renderer/font
+                # instead of relying on an assumed character-advance
+                # ratio (which drifts slightly across fonts).
+                label_len = f'{len(label) * SYSINFO_CHAR_W:.2f}'
+                dots_len = f'{len(dots) * SYSINFO_CHAR_W:.2f}'
                 parts.append(
                     f'<text x="{x_label:.1f}" y="{first_baseline:.1f}" font-family="{FONT_FAMILY}" '
                     f'font-size="{SYSINFO_FONT}">'
-                    f'<tspan fill="{COLOR_LABEL}" font-weight="600">{xml_escape(label)}</tspan>'
-                    f'<tspan fill="{COLOR_DOT_LEADER}">{xml_escape(dots)}</tspan>'
+                    f'<tspan fill="{COLOR_LABEL}" font-weight="600" '
+                    f'textLength="{label_len}" lengthAdjust="spacing">{xml_escape(label)}</tspan>'
+                    f'<tspan fill="{COLOR_DOT_LEADER}" '
+                    f'textLength="{dots_len}" lengthAdjust="spacing">{xml_escape(dots)}</tspan>'
                     f'<tspan fill="{COLOR_VALUE}">{xml_escape(first_value)}</tspan>'
                     f'{"".join(continuation_tspans)}'
                     f'</text>'
@@ -276,14 +286,13 @@ def build_svg(uptime_text: str) -> str:
 
     sysinfo_entries = get_sysinfo_entries(uptime_text)
     target_col = dot_leader_target_col(sysinfo_entries)
-    sysinfo_char_w = SYSINFO_FONT * CHAR_ASPECT
 
     info_x = divider_x + 1 + COL_GAP
     label_x = info_x
-    value_x = info_x + target_col * sysinfo_char_w
+    value_x = info_x + target_col * SYSINFO_CHAR_W
     info_col_width = WIDTH - STAGE_PAD_X - info_x
-    value_col_width = info_col_width - target_col * sysinfo_char_w
-    value_max_chars = max(10, int(value_col_width / sysinfo_char_w))
+    value_col_width = info_col_width - target_col * SYSINFO_CHAR_W
+    value_max_chars = max(10, int(value_col_width / SYSINFO_CHAR_W))
 
     events = build_info_events(sysinfo_entries, target_col, value_max_chars)
     total_h, _ = render_info_events(events, 0, label_x, value_x, emit=False)
