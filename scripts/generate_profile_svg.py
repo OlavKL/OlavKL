@@ -132,7 +132,6 @@ def get_sysinfo_entries(uptime_text: str) -> list[tuple[str, str]]:
         ("Education", "BSc Economics & Business Administration"),
         ("Interests", "Investing, Real Estate, Business Analytics"),
         ("Experience", "Technical Support, Fiber Networks & Wi-Fi"),
-        ("Side Quests", "iOS Jailbreaking, Crypto Mining, Web Scraping, Automation"),
         ("Languages", "Python, SQL"),
     ]
 
